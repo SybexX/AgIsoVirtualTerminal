@@ -42,7 +42,7 @@ public:
 	int rowCount = 6;
 	int columnCount = 1;
 	int height = 480;
-	static constexpr std::uint8_t PADDING = 10;
+	static constexpr std::uint8_t PADDING = 0;
 };
 
 class SoftKeyMaskComponent : public isobus::SoftKeyMask
