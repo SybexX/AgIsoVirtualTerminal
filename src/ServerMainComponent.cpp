@@ -89,6 +89,8 @@ ServerMainComponent::ServerMainComponent(
 
 	workingSetSelector.setTopLeftPosition(0, juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight());
 
+	loggerViewport.setTopLeftPosition(0, get_data_mask_area_size_y_pixels());
+	loggerViewport.setSize(getWidth(), LoggerComponent::HEIGHT);
 	logger.setTopLeftPosition(0, get_data_mask_area_size_y_pixels());
 	logger.setSize(getWidth(), LoggerComponent::HEIGHT);
 	loggerViewport.setViewedComponent(&logger, false);
