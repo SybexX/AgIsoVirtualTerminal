@@ -6,6 +6,8 @@
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
+#pragma once
+
 #ifndef OUTPUT_METER_COMPONENT_HPP
 #define OUTPUT_METER_COMPONENT_HPP
 
@@ -14,13 +16,12 @@
 
 #include "JuceHeader.h"
 
-class OutputMeterComponent : public isobus::OutputMeter
-  , public Component
+class OutputMeterComponent : public isobus::OutputMeter, public juce::Component
 {
 public:
 	OutputMeterComponent(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, isobus::OutputMeter sourceObject);
 
-	void paint(Graphics &g) override;
+	void paint(juce::Graphics &g) override;
 
 private:
 	std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet;

@@ -6,6 +6,8 @@
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
+#pragma once
+
 #ifndef OUTPUT_LINEAR_BAR_GRAPH_COMPONENT_HPP
 #define OUTPUT_LINEAR_BAR_GRAPH_COMPONENT_HPP
 
@@ -14,13 +16,12 @@
 
 #include "JuceHeader.h"
 
-class OutputLinearBarGraphComponent : public isobus::OutputLinearBarGraph
-  , public Component
+class OutputLinearBarGraphComponent : public isobus::OutputLinearBarGraph, public juce::Component
 {
 public:
 	OutputLinearBarGraphComponent(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, isobus::OutputLinearBarGraph sourceObject);
 
-	void paint(Graphics &g) override;
+	void paint(juce::Graphics &g) override;
 
 private:
 	std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet;

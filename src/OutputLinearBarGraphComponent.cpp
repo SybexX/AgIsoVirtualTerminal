@@ -3,94 +3,185 @@
 ** @author     Adrian Del Grosso
 ** @copyright  The Open-Agriculture Developers
 *******************************************************************************/
-#include "OutputLinearBarGraphComponent.hpp"
-#include "JuceManagedWorkingSetCache.hpp"
+#include <memory>
 
-OutputLinearBarGraphComponent::OutputLinearBarGraphComponent(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, isobus::OutputLinearBarGraph sourceObject) :
-  isobus::OutputLinearBarGraph(sourceObject),
-  parentWorkingSet(workingSet)
+#include "OutputLinearBarGraphComponent.hpp"
+
+#include <isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp>
+#include <isobus/isobus/isobus_virtual_terminal_objects.hpp>
+#include <isobus/isobus/can_constants.hpp>
+
+OutputLinearBarGraphComponent::OutputLinearBarGraphComponent(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, isobus::OutputLinearBarGraph sourceObject) : isobus::OutputLinearBarGraph(sourceObject), parentWorkingSet(workingSet)
 {
 	setSize(get_width(), get_height());
-	setOpaque(false);
 }
 
-void OutputLinearBarGraphComponent::paint(Graphics &g)
+void OutputLinearBarGraphComponent::paint(juce::Graphics &g)
 {
-	float valueRatioToMax = static_cast<float>(get_value()) / static_cast<float>(get_max_value());
-	float targetRatioToMax = static_cast<float>(get_target_value()) / static_cast<float>(get_max_value());
+	float minValue = static_cast<float>(get_min_value());
+	float maxValue = static_cast<float>(get_max_value());
+
+	float value = static_cast<float>(get_value());
+	float targetValue = static_cast<float>(get_target_value());
+
+	auto numberOfTicks = (static_cast<int>(get_number_of_ticks()) - 1);
+
+	float valueRatioToMax = (value / maxValue);
+	float targetRatioToMax = (targetValue / maxValue);
+	
 	auto vtBackgroundColour = parentWorkingSet->get_colour(get_colour());
 	auto vtTargetLineColour = parentWorkingSet->get_colour(get_target_line_colour());
-	g.setColour(Colour::fromFloatRGBA(vtBackgroundColour.r, vtBackgroundColour.g, vtBackgroundColour.b, 1.0));
+	
+	float object_width = static_cast<float>(get_width());
+	float object_height = static_cast<float>(get_height());
+	
+	float bar_graph_width = static_cast<float>(getWidth());
+	float bar_graph_height = static_cast<float>(getHeight());
 
-	if (get_option(Options::DrawBorder))
+	auto ticks_width = (bar_graph_width / numberOfTicks);
+	auto ticks_height = (bar_graph_height / numberOfTicks);
+	
+	g.setColour(juce::Colour::fromFloatRGBA(vtBackgroundColour.r, vtBackgroundColour.g, vtBackgroundColour.b, 1.0f));
+
+	if (get_option(isobus::OutputLinearBarGraph::Options::DrawBorder))
 	{
-		g.drawRect(0, 0, getWidth(), getHeight(), 3);
+		// Draws a rectangular outline, using the current colour or brush.
+		// drawRect(float x, float y, float width, float height, float lineThickness = 1.0f)
+		// The lines are drawn inside the given rectangle, and greater line thicknesses extend inwards.
+		g.drawRect(0.0f, 0.0f, bar_graph_width, bar_graph_height, 1.0f);
 	}
 
-	if (isobus::NULL_OBJECT_ID != get_variable_reference())
+	if (get_variable_reference() != isobus::NULL_OBJECT_ID)
 	{
-		auto child = get_object_by_id(get_variable_reference(), parentWorkingSet->get_object_tree());
-
-		if ((nullptr != child) && (isobus::VirtualTerminalObjectType::NumberVariable == child->get_object_type()))
+		auto varNum_child_object = get_object_by_id(get_variable_reference(), parentWorkingSet->get_object_tree());
+		if ((varNum_child_object != nullptr) && (varNum_child_object->get_object_type() == isobus::VirtualTerminalObjectType::NumberVariable))
 		{
-			valueRatioToMax = static_cast<float>(std::static_pointer_cast<isobus::NumberVariable>(child)->get_value()) / static_cast<float>(get_max_value());
+			auto number_variable = std::static_pointer_cast<isobus::NumberVariable>(varNum_child_object);
+			valueRatioToMax = (static_cast<float>(number_variable->get_value()) / static_cast<float>(get_max_value()));
 		}
 	}
 
 	// Figure out what kind of bar graph we are
-	if (get_option(Options::BarGraphType))
+	if (get_option(isobus::OutputLinearBarGraph::Options::BarGraphType))
 	{
 		// Not filled, but has value line
-
-		if (get_option(Options::AxisOrientation))
+		if (get_option(isobus::OutputLinearBarGraph::Options::AxisOrientation))
 		{
 			// X Axis
-			if (get_option(Options::Direction))
+			if (get_option(isobus::OutputLinearBarGraph::Options::Direction))
 			{
 				// From left
-				g.drawLine(static_cast<float>(get_width()) * valueRatioToMax, 0.0f, static_cast<float>(get_width()) * valueRatioToMax, static_cast<float>(get_height()), 3);
+				// Draws a line between two points with a given thickness.
+				// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+				g.drawLine((object_width * valueRatioToMax), 0.0f, (object_width * valueRatioToMax), object_height, 3.0f);
 
-				if (get_option(Options::DrawTargetLine))
+				if (get_option(isobus::OutputLinearBarGraph::Options::DrawTargetLine))
 				{
-					g.setColour(Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0));
-					g.drawVerticalLine(static_cast<float>(get_width()) * targetRatioToMax, 0.0f, static_cast<float>(get_height()));
+					g.setColour(juce::Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0f));
+					// Draws a vertical line of pixels at a given x position.
+					// drawVerticalLine(int x, float top, float bottom)
+					g.drawVerticalLine((object_width * targetRatioToMax), 0.0f, object_height);
 				}
 			}
 			else
 			{
 				// From right
-				g.drawLine(static_cast<float>(get_width()) * (1.0f - valueRatioToMax), 0.0f, static_cast<float>(get_width()) * (1.0f - valueRatioToMax), static_cast<float>(get_height()), 3);
+				// Draws a line between two points with a given thickness.
+				// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+				g.drawLine((object_width * (1.0f - valueRatioToMax)), 0.0f, (object_width * (1.0f - valueRatioToMax)), object_height, 3.0f);
 
-				if (get_option(Options::DrawTargetLine))
+				if (get_option(isobus::OutputLinearBarGraph::Options::DrawTargetLine))
 				{
-					g.setColour(Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0));
-					g.drawVerticalLine(static_cast<float>(get_width()) * (1.0f - targetRatioToMax), 0.0f, static_cast<float>(get_height()));
+					g.setColour(juce::Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0f));
+					// Draws a vertical line of pixels at a given x position.
+					// drawVerticalLine(int x, float top, float bottom)
+					g.drawVerticalLine((object_width * (1.0f - targetRatioToMax)), 0.0f, object_height);
+				}
+			}
+
+			if (get_option(isobus::OutputLinearBarGraph::Options::DrawTicks))
+			{
+				g.setColour(juce::Colour::fromFloatRGBA(vtBackgroundColour.r, vtBackgroundColour.g, vtBackgroundColour.b, 1.0f));
+
+				auto tick_height = (object_height / 3);
+				if (tick_height > 6)
+				{
+					tick_height = 6;
+				}
+				else if (tick_height < 2)
+				{
+					tick_height = 2;
+				}
+
+				for (int i = 0; i < (numberOfTicks - 1); i++)
+				{
+					// Draws a line between two points with a given thickness.
+					// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+					g.drawLine((ticks_width + (i * ticks_width)), 0.0f, (ticks_width + (i * ticks_width)), tick_height, 1.0f);
+
+					// Draws a line between two points with a given thickness.
+					// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+					g.drawLine((ticks_width + (i * ticks_width)), (object_height - tick_height), (ticks_width + (i * ticks_width)), object_height, 1.0f);
 				}
 			}
 		}
 		else
 		{
 			// Y Axis
-			if (get_option(Options::Direction))
+			if (get_option(isobus::OutputLinearBarGraph::Options::Direction))
 			{
 				// From bottom
-				g.drawLine(0, (1.0f - valueRatioToMax) * getHeight(), getWidth(), (1.0f - valueRatioToMax) * getHeight(), 3);
+				// Draws a line between two points with a given thickness.
+				// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+				g.drawLine(0, ((1.0f - valueRatioToMax) * bar_graph_height), bar_graph_width, ((1.0f - valueRatioToMax) * bar_graph_height), 3.0f);
 
-				if (get_option(Options::DrawTargetLine))
+				if (get_option(isobus::OutputLinearBarGraph::Options::DrawTargetLine))
 				{
-					g.setColour(Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0));
-					g.drawHorizontalLine(static_cast<float>(get_height() * (1.0f - targetRatioToMax)), 0.0f, static_cast<float>(get_width()));
+					g.setColour(juce::Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0f));
+					// Draws a horizontal line of pixels at a given y position.
+					// drawHorizontalLine(int y, float left, float right);
+					g.drawHorizontalLine((object_height * (1.0f - targetRatioToMax)), 0.0f, object_width);
 				}
 			}
 			else
 			{
 				// From top
-				g.drawLine(0, valueRatioToMax * getHeight(), getWidth(), valueRatioToMax * getHeight(), 3);
+				// Draws a line between two points with a given thickness.
+				// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+				g.drawLine(0, (valueRatioToMax * bar_graph_height), bar_graph_width, (valueRatioToMax * bar_graph_height), 3.0f);
 
-				if (get_option(Options::DrawTargetLine))
+				if (get_option(isobus::OutputLinearBarGraph::Options::DrawTargetLine))
 				{
-					g.setColour(Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0));
-					g.drawHorizontalLine(static_cast<float>(get_height() * targetRatioToMax), 0.0f, static_cast<float>(get_width()));
+					g.setColour(juce::Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0f));
+					// Draws a horizontal line of pixels at a given y position.
+					// drawHorizontalLine(int y, float left, float right);
+					g.drawHorizontalLine((object_height * targetRatioToMax), 0.0f, object_width);
+				}
+			}
+
+			if (get_option(isobus::OutputLinearBarGraph::Options::DrawTicks))
+			{
+				g.setColour(juce::Colour::fromFloatRGBA(vtBackgroundColour.r, vtBackgroundColour.g, vtBackgroundColour.b, 1.0f));
+
+				auto tick_width = (object_width / 3);
+				if (tick_width > 6)
+				{
+					tick_width = 6;
+				}
+				else if (tick_width < 2)
+				{
+					tick_width = 2;
+				}
+
+				for (int i = 0; i < (numberOfTicks - 1); i++)
+				{
+					// Draws a line between two points with a given thickness.
+					// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+					g.drawLine(0.0f, (ticks_height + (i * ticks_height)), tick_width, (ticks_height + (i * ticks_height)), 1.0f);
+
+					// Draws a line between two points with a given thickness.
+					// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+					g.drawLine((object_width - tick_width), (ticks_height + (i * ticks_height)), object_width, (ticks_height + (i * ticks_height)), 1.0f);
 				}
 			}
 		}
@@ -98,56 +189,115 @@ void OutputLinearBarGraphComponent::paint(Graphics &g)
 	else
 	{
 		// Filled
-
-		if (get_option(Options::AxisOrientation))
+		if (get_option(isobus::OutputLinearBarGraph::Options::AxisOrientation))
 		{
 			// X Axis
-			if (get_option(Options::Direction))
+			if (get_option(isobus::OutputLinearBarGraph::Options::Direction))
 			{
 				// From left
-				g.fillRect(0.0f, 0.0f, static_cast<float>(get_width()) * valueRatioToMax, static_cast<float>(get_height()));
+				g.fillRect(0.0f, 0.0f, object_width * valueRatioToMax, object_height);
 
-				if (get_option(Options::DrawTargetLine))
+				if (get_option(isobus::OutputLinearBarGraph::Options::DrawTargetLine))
 				{
-					g.setColour(Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0));
-					g.drawVerticalLine(static_cast<float>(get_width()) * targetRatioToMax, 0.0f, static_cast<float>(get_height()));
+					g.setColour(juce::Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0f));
+					// Draws a vertical line of pixels at a given x position.
+					// drawVerticalLine(int x, float top, float bottom)
+					g.drawVerticalLine((object_width * targetRatioToMax), 0.0f, object_height);
 				}
 			}
 			else
 			{
 				// From right
-				g.fillRect(static_cast<float>(get_width()) * (1 - valueRatioToMax), 0.0f, static_cast<float>(get_width()) * valueRatioToMax, static_cast<float>(get_height()));
+				g.fillRect((object_width * (1.0f - valueRatioToMax)), 0.0f, (object_width * valueRatioToMax), object_height);
 
-				if (get_option(Options::DrawTargetLine))
+				if (get_option(isobus::OutputLinearBarGraph::Options::DrawTargetLine))
 				{
-					g.setColour(Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0));
-					g.drawVerticalLine(static_cast<float>(get_width()) * (1 - targetRatioToMax), 0.0f, static_cast<float>(get_height()));
+					g.setColour(juce::Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0f));
+					// Draws a vertical line of pixels at a given x position.
+					// drawVerticalLine(int x, float top, float bottom)
+					g.drawVerticalLine((object_width * (1.0f - targetRatioToMax)), 0.0f, object_height);
+				}
+			}
+
+			if (get_option(isobus::OutputLinearBarGraph::Options::DrawTicks))
+			{
+				g.setColour(juce::Colour::fromFloatRGBA(vtBackgroundColour.r, vtBackgroundColour.g, vtBackgroundColour.b, 1.0f));
+
+				auto tick_height = (object_height / 3);
+				if (tick_height > 6)
+				{
+					tick_height = 6;
+				}
+				else if (tick_height < 2)
+				{
+					tick_height = 2;
+				}
+
+				for (int i = 0; i < (numberOfTicks - 1); i++)
+				{
+					// Draws a line between two points with a given thickness.
+					// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+					g.drawLine((ticks_width + (i * ticks_width)), 0.0f, (ticks_width + (i * ticks_width)), tick_height, 1.0f);
+
+					// Draws a line between two points with a given thickness.
+					// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+					g.drawLine((ticks_width + (i * ticks_width)), (object_height - tick_height), (ticks_width + (i * ticks_width)), object_height, 1.0f);
 				}
 			}
 		}
 		else
 		{
 			// Y Axis
-			if (get_option(Options::Direction))
+			if (get_option(isobus::OutputLinearBarGraph::Options::Direction))
 			{
 				// From bottom
-				g.fillRect(0.0f, static_cast<float>(get_height() * (1 - valueRatioToMax)), static_cast<float>(get_width()), static_cast<float>(get_height()) * valueRatioToMax);
+				g.fillRect(0.0f, (object_height * (1.0f - valueRatioToMax)), object_width, (object_height * valueRatioToMax));
 
-				if (get_option(Options::DrawTargetLine))
+				if (get_option(isobus::OutputLinearBarGraph::Options::DrawTargetLine))
 				{
-					g.setColour(Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0));
-					g.drawHorizontalLine(static_cast<float>(get_height() * (1 - targetRatioToMax)), 0.0f, static_cast<float>(get_width()));
+					g.setColour(juce::Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0f));
+					// Draws a horizontal line of pixels at a given y position.
+					// drawHorizontalLine(int y, float left, float right);
+					g.drawHorizontalLine((object_height * (1.0f - targetRatioToMax)), 0.0f, object_width);
 				}
 			}
 			else
 			{
 				// From top
-				g.fillRect(0.0f, 0.0f, static_cast<float>(get_width()), static_cast<float>(get_height()) * valueRatioToMax);
+				g.fillRect(0.0f, 0.0f, object_width, (object_height * valueRatioToMax));
 
-				if (get_option(Options::DrawTargetLine))
+				if (get_option(isobus::OutputLinearBarGraph::Options::DrawTargetLine))
 				{
-					g.setColour(Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0));
-					g.drawHorizontalLine(static_cast<float>(get_height() * targetRatioToMax), 0.0f, static_cast<float>(get_width()));
+					g.setColour(juce::Colour::fromFloatRGBA(vtTargetLineColour.r, vtTargetLineColour.g, vtTargetLineColour.b, 1.0f));
+					// Draws a horizontal line of pixels at a given y position.
+					// drawHorizontalLine(int y, float left, float right);
+					g.drawHorizontalLine((object_height * targetRatioToMax), 0.0f, object_width);
+				}
+			}
+
+			if (get_option(isobus::OutputLinearBarGraph::Options::DrawTicks))
+			{
+				g.setColour(juce::Colour::fromFloatRGBA(vtBackgroundColour.r, vtBackgroundColour.g, vtBackgroundColour.b, 1.0f));
+
+				auto tick_width = (object_width / 3);
+				if (tick_width > 6)
+				{
+					tick_width = 6;
+				}
+				else if (tick_width < 2)
+				{
+					tick_width = 2;
+				}
+
+				for (int i = 0; i < (numberOfTicks - 1); i++)
+				{
+					// Draws a line between two points with a given thickness.
+					// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+					g.drawLine(0.0f, (ticks_height + (i * ticks_height)), tick_width, (ticks_height + (i * ticks_height)), 1.0f);
+
+					// Draws a line between two points with a given thickness.
+					// drawLine(float startX, float startY, float endX, float endY, float lineThickness)
+					g.drawLine((object_width - tick_width), (ticks_height + (i * ticks_height)), object_width, (ticks_height + (i * ticks_height)), 1.0f);
 				}
 			}
 		}

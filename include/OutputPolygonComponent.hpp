@@ -6,6 +6,8 @@
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
+#pragma once
+
 #ifndef OUTPUT_POLYGON_COMPONENT_HPP
 #define OUTPUT_POLYGON_COMPONENT_HPP
 
@@ -14,13 +16,12 @@
 
 #include "JuceHeader.h"
 
-class OutputPolygonComponent : public isobus::OutputPolygon
-  , public Component
+class OutputPolygonComponent : public isobus::OutputPolygon, public juce::Component
 {
 public:
 	OutputPolygonComponent(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, isobus::OutputPolygon sourceObject);
 
-	void paint(Graphics &g) override;
+	void paint(juce::Graphics &g) override;
 
 private:
 	std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet;

@@ -9,9 +9,7 @@
 #include "SoftKeyMaskRenderAreaComponent.hpp"
 
 SoftKeyMaskComponent::SoftKeyMaskComponent(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, isobus::SoftKeyMask sourceObject, SoftKeyMaskDimensions dimensions) :
-  isobus::SoftKeyMask(sourceObject),
-  parentWorkingSet(workingSet),
-  dimensionInfo(dimensions)
+  isobus::SoftKeyMask(sourceObject), parentWorkingSet(workingSet), dimensionInfo(dimensions)
 {
 	setOpaque(true);
 	setBounds(0, 0, dimensions.total_width(), dimensions.height);
@@ -21,8 +19,8 @@ SoftKeyMaskComponent::SoftKeyMaskComponent(std::shared_ptr<isobus::VirtualTermin
 void SoftKeyMaskComponent::on_content_changed(bool initial)
 {
 	int row = 0;
-	int x = dimensionInfo.PADDING + (dimensionInfo.columnCount - 1) * (dimensionInfo.PADDING + dimensionInfo.keyWidth);
-	int y = dimensionInfo.PADDING;
+	int x = ((dimensionInfo.keyColumnCount - 1) * (dimensionInfo.keyWidth + dimensionInfo.keyPadding)) + dimensionInfo.keyPadding;
+	int y = dimensionInfo.keyPadding;
 
 	for (std::uint16_t i = 0; i < this->get_number_children(); i++)
 	{
@@ -41,14 +39,15 @@ void SoftKeyMaskComponent::on_content_changed(bool initial)
 			{
 				addAndMakeVisible(*childComponents.back());
 				childComponents.back()->setTopLeftPosition(x, y);
-				y += (dimensionInfo.PADDING + dimensionInfo.keyWidth);
+				y += (dimensionInfo.keyWidth + dimensionInfo.keyPadding);
 
 				row++;
-				if (row >= dimensionInfo.rowCount)
+
+				if (row >= dimensionInfo.keyRowCount)
 				{
 					row = 0;
-					x -= (dimensionInfo.PADDING + dimensionInfo.keyWidth);
-					y = dimensionInfo.PADDING;
+					x -= (dimensionInfo.keyWidth + dimensionInfo.keyPadding);
+					y = dimensionInfo.keyPadding;
 				}
 			}
 		}
@@ -69,15 +68,15 @@ void SoftKeyMaskComponent::paint(Graphics &g)
 
 int SoftKeyMaskDimensions::key_count() const
 {
-	return columnCount * rowCount;
+	return keyColumnCount * keyRowCount;
 }
 
 int SoftKeyMaskDimensions::total_width() const
 {
-	return PADDING + (columnCount * (keyWidth + PADDING));
+	return (keyColumnCount * (keyWidth + keyPadding)) + keyPadding;
 }
 
 int SoftKeyMaskDimensions::total_height() const
 {
-	return PADDING + (rowCount * (keyHeight + PADDING));
+	return (keyRowCount * (keyHeight + keyPadding)) + keyPadding;
 }

@@ -1,11 +1,13 @@
-//================================================================================================
-/// @file SoftKeyMaskComponent.hpp
-///
-/// @brief Defines a GUI component to draw a soft key mask.
-/// @author Adrian Del Grosso
-///
-/// @copyright 2023 Adrian Del Grosso
-//================================================================================================
+/*******************************************************************************
+** @file SoftKeyMaskComponent.hpp
+**
+** @brief Defines a GUI component to draw a soft key mask.
+** @author Adrian Del Grosso
+**
+** @copyright 2023 Adrian Del Grosso
+*******************************************************************************/
+#pragma once
+
 #ifndef SOFT_KEY_MASK_COMPONENT_HPP
 #define SOFT_KEY_MASK_COMPONENT_HPP
 
@@ -37,16 +39,38 @@ public:
 	 */
 	int key_count() const;
 
+	int height = 480;
+
 	int keyHeight = 60;
 	int keyWidth = 60;
-	int rowCount = 6;
-	int columnCount = 1;
-	int height = 480;
-	static constexpr std::uint8_t PADDING = 10;
+
+	int keyColumnCount = 1;
+	int keyRowCount = 6;
+
+	// Orientation Values:
+	// Top                                    =   0
+	// Bottom                                 =   1
+	// Left                                   =   2
+	// Right                                  =   3
+	// LeftLeft                               =   4
+	// LeftRight                              =   5
+	// RightRight                             =   6
+	// TopTop                                 =   7
+	// TopBottom                              =   8
+	// BottomBottom                           =   9
+	std::uint8_t keyOrientation = 6;
+
+	// Order Values:
+	// TopLeft                                =   0
+	// TopRight                               =   1
+	// BottomLeft                             =   2
+	// BottomRight                            =   3
+	std::uint8_t keyOrder = 1;
+
+	std::uint8_t keyPadding = 0;
 };
 
-class SoftKeyMaskComponent : public isobus::SoftKeyMask
-  , public Component
+class SoftKeyMaskComponent : public isobus::SoftKeyMask, public Component
 {
 public:
 	SoftKeyMaskComponent(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, isobus::SoftKeyMask sourceObject, SoftKeyMaskDimensions dimensions);

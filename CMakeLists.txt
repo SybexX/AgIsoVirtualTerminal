@@ -79,7 +79,7 @@ target_sources(
           "src/ContainerComponent.cpp"
           "src/ObjectPointerComponent.cpp"
           "src/OutputNumberComponent.cpp"
-          "src/SoftkeyMaskRenderArea.cpp"
+          "src/SoftKeyMaskRenderAreaComponent.cpp"
           "src/KeyComponent.cpp"
           "src/SoftKeyMaskComponent.cpp"
           "src/OutputMeterComponent.cpp"

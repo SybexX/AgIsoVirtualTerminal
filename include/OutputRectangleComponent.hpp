@@ -6,6 +6,8 @@
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
+#pragma once
+
 #ifndef OUTPUT_RECTANGLE_COMPONENT_HPP
 #define OUTPUT_RECTANGLE_COMPONENT_HPP
 
@@ -14,13 +16,12 @@
 
 #include "JuceHeader.h"
 
-class OutputRectangleComponent : public isobus::OutputRectangle
-  , public Component
+class OutputRectangleComponent : public isobus::OutputRectangle, public juce::Component
 {
 public:
 	OutputRectangleComponent(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, isobus::OutputRectangle sourceObject);
 
-	void paint(Graphics &g) override;
+	void paint(juce::Graphics &g) override;
 
 private:
 	std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet;

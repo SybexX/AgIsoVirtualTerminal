@@ -1,4 +1,14 @@
+/*******************************************************************************
+** @file       ServerMainComponent.hpp
+** @author     Adrian Del Grosso
+** @copyright  The Open-Agriculture Developers
+*******************************************************************************/
 #pragma once
+
+#ifndef SERVER_MAIN_COMPONENT_HPP
+#define SERVER_MAIN_COMPONENT_HPP
+
+#include <filesystem>
 
 #include "ConfigureHardwareWindow.hpp"
 #include "DataMaskRenderAreaComponent.hpp"
@@ -7,11 +17,10 @@
 #include "SoftKeyMaskRenderAreaComponent.hpp"
 #include "VT_NumberComponent.hpp"
 #include "WorkingSetSelectorComponent.hpp"
-#include "isobus/isobus/isobus_diagnostic_protocol.hpp"
-#include "isobus/isobus/isobus_time_date_interface.hpp"
-#include "isobus/isobus/isobus_virtual_terminal_server.hpp"
 
-#include <filesystem>
+#include <isobus/isobus/isobus_diagnostic_protocol.hpp>
+#include <isobus/isobus/isobus_time_date_interface.hpp>
+#include <isobus/isobus/isobus_virtual_terminal_server.hpp>
 
 class ServerMainComponent : public juce::Component
   , public juce::KeyListener
@@ -225,3 +234,5 @@ private:
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ServerMainComponent)
 };
+
+#endif // SERVER_MAIN_COMPONENT_HPP

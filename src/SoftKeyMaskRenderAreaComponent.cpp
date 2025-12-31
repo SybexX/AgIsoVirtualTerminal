@@ -7,8 +7,7 @@
 #include "ServerMainComponent.hpp"
 #include "SoftKeyMaskRenderAreaComponent.hpp"
 
-SoftKeyMaskRenderAreaComponent::SoftKeyMaskRenderAreaComponent(ServerMainComponent &parentServer) :
-  ownerServer(parentServer)
+SoftKeyMaskRenderAreaComponent::SoftKeyMaskRenderAreaComponent(ServerMainComponent &parentServer) : ownerServer(parentServer)
 {
 	//addMouseListener(this, true);
 }
@@ -119,16 +118,8 @@ void SoftKeyMaskRenderAreaComponent::mouseDown(const MouseEvent &event)
 					keyCode = std::static_pointer_cast<isobus::Key>(clickedObject)->get_key_code();
 				}
 
-				ownerServer.send_soft_key_activation_message(isobus::VirtualTerminalBase::KeyActivationCode::ButtonPressedOrLatched,
-				                                             clickedObject->get_id(),
-				                                             parentMask->get_id(),
-				                                             keyCode,
-				                                             ownerServer.get_active_working_set()->get_control_function());
-				ownerServer.set_button_held(ownerServer.get_active_working_set(),
-				                            clickedObject->get_id(),
-				                            activeMask->get_id(),
-				                            keyCode,
-				                            true);
+				ownerServer.send_soft_key_activation_message(isobus::VirtualTerminalBase::KeyActivationCode::ButtonPressedOrLatched, clickedObject->get_id(), parentMask->get_id(), keyCode, ownerServer.get_active_working_set()->get_control_function());
+				ownerServer.set_button_held(ownerServer.get_active_working_set(), clickedObject->get_id(), activeMask->get_id(), keyCode, true);
 			}
 		}
 	}
@@ -179,16 +170,9 @@ void SoftKeyMaskRenderAreaComponent::mouseUp(const MouseEvent &event)
 					keyCode = std::static_pointer_cast<isobus::Key>(clickedObject)->get_key_code();
 				}
 
-				ownerServer.send_soft_key_activation_message(isobus::VirtualTerminalBase::KeyActivationCode::ButtonUnlatchedOrReleased,
-				                                             clickedObject->get_id(),
-				                                             parentMask->get_id(),
-				                                             keyCode,
-				                                             ownerServer.get_active_working_set()->get_control_function());
-				ownerServer.set_button_released(ownerServer.get_active_working_set(),
-				                                clickedObject->get_id(),
-				                                activeMask->get_id(),
-				                                keyCode,
-				                                true);
+				ownerServer.send_soft_key_activation_message(isobus::VirtualTerminalBase::KeyActivationCode::ButtonUnlatchedOrReleased, clickedObject->get_id(), parentMask->get_id(), keyCode, ownerServer.get_active_working_set()->get_control_function());
+
+				ownerServer.set_button_released(ownerServer.get_active_working_set(), clickedObject->get_id(), activeMask->get_id(), keyCode, true);
 			}
 		}
 	}
@@ -198,9 +182,7 @@ std::shared_ptr<isobus::VTObject> SoftKeyMaskRenderAreaComponent::getClickedChil
 {
 	std::shared_ptr<isobus::VTObject> retVal;
 
-	if ((nullptr == object) ||
-	    ((isobus::VirtualTerminalObjectType::ObjectPointer != object->get_object_type()) &&
-	     (0 == object->get_number_children())))
+	if ((nullptr == object) || ((isobus::VirtualTerminalObjectType::ObjectPointer != object->get_object_type()) && (0 == object->get_number_children())))
 	{
 		return nullptr;
 	}
@@ -211,9 +193,7 @@ std::shared_ptr<isobus::VTObject> SoftKeyMaskRenderAreaComponent::getClickedChil
 
 		// Knowing the location requires some knowledge of how the mask is displaying each key...
 
-		if ((nullptr != child) &&
-		    (objectCanBeClicked(child)) &&
-		    (isClickWithinBounds(x, y, 0, 0, ownerServer.get_soft_key_descriptor_x_pixel_width(), ownerServer.get_soft_key_descriptor_y_pixel_height())))
+		if ((nullptr != child) && (objectCanBeClicked(child)) && (isClickWithinBounds(x, y, 0, 0, ownerServer.get_soft_key_descriptor_x_pixel_width(), ownerServer.get_soft_key_descriptor_y_pixel_height())))
 		{
 			return child;
 		}
@@ -225,17 +205,17 @@ std::shared_ptr<isobus::VTObject> SoftKeyMaskRenderAreaComponent::getClickedChil
 	else
 	{
 		int row = 0, col = (ownerServer.get_physical_soft_key_columns() - 1);
+
 		for (std::uint16_t i = 0; i < object->get_number_children(); i++)
 		{
 			auto child = object->get_object_by_id(object->get_child_id(i), parentWorkingSet->get_object_tree());
 
 			// Knowing the location requires some knowledge of how the mask is displaying each key...
 
-			int colX = SoftKeyMaskDimensions::PADDING + col * (ownerServer.get_soft_key_descriptor_x_pixel_width() + SoftKeyMaskDimensions::PADDING);
-			int rowY = SoftKeyMaskDimensions::PADDING + row * (ownerServer.get_soft_key_descriptor_y_pixel_height() + SoftKeyMaskDimensions::PADDING);
-			if ((nullptr != child) &&
-			    (objectCanBeClicked(child)) &&
-			    (isClickWithinBounds(x, y, colX, rowY, ownerServer.get_soft_key_descriptor_x_pixel_width(), ownerServer.get_soft_key_descriptor_y_pixel_height())))
+			int colX = (col * (ownerServer.get_soft_key_descriptor_x_pixel_width() + softKeyMaskDimensions.keyPadding)) + softKeyMaskDimensions.keyPadding;
+			int rowY = (row * (ownerServer.get_soft_key_descriptor_y_pixel_height() + softKeyMaskDimensions.keyPadding)) + softKeyMaskDimensions.keyPadding;
+
+			if ((nullptr != child) && (objectCanBeClicked(child)) && (isClickWithinBounds(x, y, colX, rowY, ownerServer.get_soft_key_descriptor_x_pixel_width(), ownerServer.get_soft_key_descriptor_y_pixel_height())))
 			{
 				return child;
 			}
@@ -248,7 +228,9 @@ std::shared_ptr<isobus::VTObject> SoftKeyMaskRenderAreaComponent::getClickedChil
 					break;
 				}
 			}
+
 			row++;
+
 			if (row >= ownerServer.get_physical_soft_key_rows())
 			{
 				row = 0;
@@ -285,6 +267,5 @@ bool SoftKeyMaskRenderAreaComponent::objectCanBeClicked(std::shared_ptr<isobus::
 
 bool SoftKeyMaskRenderAreaComponent::isClickWithinBounds(int clickXRelative, int clickYRelative, int objectX, int objectY, int objectWidth, int objectHeight)
 {
-	return ((clickXRelative >= objectX) && (clickXRelative <= (objectX + objectWidth))) &&
-	  ((clickYRelative >= objectY) && (clickYRelative <= (objectY + objectHeight)));
+	return ((clickXRelative >= objectX) && (clickXRelative <= (objectX + objectWidth))) && ((clickYRelative >= objectY) && (clickYRelative <= (objectY + objectHeight)));
 }

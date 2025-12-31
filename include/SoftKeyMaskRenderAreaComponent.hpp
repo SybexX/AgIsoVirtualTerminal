@@ -1,18 +1,20 @@
-//================================================================================================
-/// @file SoftKeyMaskRenderAreaComponent.hpp
-///
-/// @brief A component to hold all the data mask render components.
-/// @author Adrian Del Grosso
-///
-/// @copyright 2023 Adrian Del Grosso
-//================================================================================================
+/*******************************************************************************
+** @file SoftKeyMaskRenderAreaComponent.hpp
+**
+** @brief A component to hold all the data mask render components.
+** @author Adrian Del Grosso
+**
+** @copyright 2023 Adrian Del Grosso
+*******************************************************************************/
+#pragma once
+
 #ifndef SOFT_KEY_MASK_RENDER_AREA_COMPONENT_HPP
 #define SOFT_KEY_MASK_RENDER_AREA_COMPONENT_HPP
 
+#include "JuceHeader.h"
+
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
-
-#include "JuceHeader.h"
 
 class ServerMainComponent;
 
@@ -32,6 +34,8 @@ public:
 
 	// Used to calculate button release events
 	void mouseUp(const MouseEvent &event) override;
+
+	SoftKeyMaskDimensions softKeyMaskDimensions;
 
 private:
 	std::shared_ptr<isobus::VTObject> getClickedChildRecursive(std::shared_ptr<isobus::VTObject> object, int x, int y);

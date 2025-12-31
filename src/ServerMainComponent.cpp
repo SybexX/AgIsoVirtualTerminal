@@ -3,6 +3,12 @@
 ** @author     Adrian Del Grosso
 ** @copyright  The Open-Agriculture Developers
 *******************************************************************************/
+#include <chrono>
+#include <fstream>
+#include <iomanip>
+#include <iterator>
+#include <sstream>
+
 #include "ServerMainComponent.hpp"
 
 #include "AlarmMaskAudio.h"
@@ -14,25 +20,13 @@
 #include "SoftKeyMaskRenderAreaComponent.hpp"
 
 #ifdef JUCE_WINDOWS
-#include "isobus/hardware_integration/toucan_vscp_canal.hpp"
+#include <isobus/hardware_integration/toucan_vscp_canal.hpp>
 #elif JUCE_LINUX
-#include "isobus/hardware_integration/socket_can_interface.hpp"
+#include <isobus/hardware_integration/socket_can_interface.hpp>
 #endif
-#include "isobus/isobus/can_stack_logger.hpp"
+#include <isobus/isobus/can_stack_logger.hpp>
 
-#include <chrono>
-#include <fstream>
-#include <iomanip>
-#include <iterator>
-#include <sstream>
-
-ServerMainComponent::ServerMainComponent(
-  std::shared_ptr<isobus::InternalControlFunction> serverControlFunction,
-  std::vector<std::shared_ptr<isobus::CANHardwarePlugin>> &canDrivers,
-  std::shared_ptr<ValueTree> settings,
-  const std::string &canLogPath_,
-  std::uint8_t vtNumberArg,
-  std::string screenCaptureDir) :
+ServerMainComponent::ServerMainComponent(std::shared_ptr<isobus::InternalControlFunction> serverControlFunction, std::vector<std::shared_ptr<isobus::CANHardwarePlugin>> &canDrivers, std::shared_ptr<ValueTree> settings, const std::string &canLogPath_, std::uint8_t vtNumberArg, std::string screenCaptureDir) :
   VirtualTerminalServer(serverControlFunction), screenCaptureDirArgument(screenCaptureDir), workingSetSelector(*this), dataMaskRenderer(*this), softKeyMaskRenderer(*this), parentCANDrivers(canDrivers), canLogPath(canLogPath_)
 {
 	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
@@ -84,12 +78,14 @@ ServerMainComponent::ServerMainComponent(
 
 	// Make sure you set the size of the component after
 	// you add any child components.
-	setSize(WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width(),
-	        minimum_height() + LoggerComponent::HEIGHT);
+	setSize(WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10, 
+		minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + LoggerComponent::HEIGHT);
 
 	workingSetSelector.setTopLeftPosition(0, juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight());
 
-	logger.setTopLeftPosition(0, get_data_mask_area_size_y_pixels());
+	loggerViewport.setTopLeftPosition(0, minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight());
+	loggerViewport.setSize(getWidth(), LoggerComponent::HEIGHT);
+	logger.setTopLeftPosition(0, minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight());
 	logger.setSize(getWidth(), LoggerComponent::HEIGHT);
 	loggerViewport.setViewedComponent(&logger, false);
 
@@ -124,7 +120,7 @@ std::uint8_t ServerMainComponent::get_soft_key_descriptor_x_pixel_width() const
 {
 	std::uint8_t retVal = 32;
 
-	if (versionToReport == VTVersion::Version6)
+	if (versionToReport == isobus::VirtualTerminalBase::VTVersion::Version6)
 	{
 		retVal = 60; // 60x60 is the minimum size for VT Version 6+
 	}
@@ -154,7 +150,7 @@ std::uint8_t ServerMainComponent::get_number_of_possible_virtual_soft_keys_in_so
 
 	// VT Version 3 and prior shall support a maximum of 64 virtual Soft Keys per Soft Key Mask and shall
 	// support as a minimum the number of reported physical Soft Keys
-	if (versionToReport < VTVersion::Version3)
+	if (versionToReport < isobus::VirtualTerminalBase::VTVersion::Version3)
 	{
 		if (retVal > MAX_VIRTUAL_SOFT_KEYS)
 		{
@@ -188,12 +184,12 @@ std::uint8_t ServerMainComponent::get_number_of_physical_soft_keys() const
 
 std::uint8_t ServerMainComponent::get_physical_soft_key_columns() const
 {
-	return softKeyMaskDimensions.columnCount < 1 ? 1 : softKeyMaskDimensions.columnCount;
+	return softKeyMaskDimensions.keyColumnCount < 1 ? 1 : softKeyMaskDimensions.keyColumnCount;
 }
 
 std::uint8_t ServerMainComponent::get_physical_soft_key_rows() const
 {
-	return softKeyMaskDimensions.rowCount < 1 ? 1 : softKeyMaskDimensions.rowCount;
+	return softKeyMaskDimensions.keyRowCount < 1 ? 1 : softKeyMaskDimensions.keyRowCount;
 }
 
 std::uint16_t ServerMainComponent::get_data_mask_area_size_x_pixels() const
@@ -210,11 +206,7 @@ void ServerMainComponent::suspend_working_set(std::shared_ptr<isobus::VirtualTer
 {
 }
 
-isobus::VirtualTerminalBase::SupportedWideCharsErrorCode ServerMainComponent::get_supported_wide_chars(std::uint8_t,
-                                                                                                       std::uint16_t,
-                                                                                                       std::uint16_t,
-                                                                                                       std::uint8_t &,
-                                                                                                       std::vector<std::uint8_t> &)
+isobus::VirtualTerminalBase::SupportedWideCharsErrorCode ServerMainComponent::get_supported_wide_chars(std::uint8_t, std::uint16_t, std::uint16_t, std::uint8_t &, std::vector<std::uint8_t> &)
 {
 	return isobus::VirtualTerminalBase::SupportedWideCharsErrorCode::AnyOtherError;
 }
@@ -253,11 +245,7 @@ std::vector<std::array<std::uint8_t, 7>> ServerMainComponent::get_versions(isobu
 	std::ostringstream nameString;
 	std::vector<std::array<std::uint8_t, 7>> retVal;
 	nameString << std::hex << std::setfill('0') << std::setw(16) << clientNAME.get_full_name();
-	File isoDirectory(getAppDataDir() +
-	                  File::getSeparatorString() +
-	                  ISO_DATA_PATH +
-	                  File::getSeparatorString() +
-	                  nameString.str());
+	File isoDirectory(getAppDataDir() + File::getSeparatorString() + ISO_DATA_PATH + File::getSeparatorString() + nameString.str());
 
 	if (isoDirectory.exists() && isoDirectory.isDirectory())
 	{
@@ -275,6 +263,7 @@ std::vector<std::array<std::uint8_t, 7>> ServerMainComponent::get_versions(isobu
 
 				// Only add the version label if it is not already in the list
 				bool versionAlreadyInList = false;
+
 				for (const auto &version : retVal)
 				{
 					if (version == versionLabel)
@@ -309,16 +298,10 @@ std::vector<std::uint8_t> ServerMainComponent::load_version(const std::vector<st
 	std::ostringstream nameString;
 	std::vector<std::uint8_t> loadedIOPData;
 	std::vector<std::uint8_t> loadedVersionLabel(7);
-	std::string path = (getAppDataDir() +
-	                    File::getSeparatorString() +
-	                    ISO_DATA_PATH +
-	                    File::getSeparatorString())
-	                     .toStdString();
+	std::string path = (getAppDataDir() + File::getSeparatorString() + ISO_DATA_PATH + File::getSeparatorString()).toStdString();
 	nameString << std::hex << std::setfill('0') << std::setw(16) << clientNAME.get_full_name();
 
-	if ((std::filesystem::is_directory(path + nameString.str()) ||
-	     std::filesystem::exists(path + nameString.str())) &&
-	    (7 == versionLabel.size()))
+	if ((std::filesystem::is_directory(path + nameString.str()) || std::filesystem::exists(path + nameString.str())) && (7 == versionLabel.size()))
 	{
 		for (const auto &entry : std::filesystem::directory_iterator(path + nameString.str()))
 		{
@@ -359,10 +342,7 @@ std::vector<std::uint8_t> ServerMainComponent::load_version(const std::vector<st
 bool ServerMainComponent::save_version(const std::vector<std::uint8_t> &objectPool, const std::vector<std::uint8_t> &versionLabel, isobus::NAME clientNAME)
 {
 	bool retVal = false;
-	std::string path = (getAppDataDir() +
-	                    File::getSeparatorString() +
-	                    String(ISO_DATA_PATH))
-	                     .toStdString();
+	std::string path = (getAppDataDir() + File::getSeparatorString() + String(ISO_DATA_PATH)).toStdString();
 
 	// Main saved data folder
 	if (!std::filesystem::is_directory(path) || !std::filesystem::exists(path))
@@ -375,7 +355,8 @@ bool ServerMainComponent::save_version(const std::vector<std::uint8_t> &objectPo
 	nameString << std::hex << std::setfill('0') << std::setw(16) << clientNAME.get_full_name();
 
 	if (!std::filesystem::is_directory(path + "/" + nameString.str()) || !std::filesystem::exists(path + "/" + nameString.str()))
-	{ // Check if src folder exists
+	{ 
+		// Check if src folder exists
 		std::filesystem::create_directory(path + "/" + nameString.str()); // create src folder
 	}
 
@@ -389,11 +370,13 @@ bool ServerMainComponent::save_version(const std::vector<std::uint8_t> &objectPo
 		iopxFile.close();
 		retVal = true;
 	}
+
 	if (iopFile.is_open())
 	{
 		iopFile.write(reinterpret_cast<const char *>(objectPool.data()), static_cast<std::streamsize>(objectPool.size()));
 		iopFile.close();
 	}
+
 	return retVal;
 }
 
@@ -403,16 +386,10 @@ bool ServerMainComponent::delete_version(const std::vector<std::uint8_t> &versio
 	std::ostringstream nameString;
 	std::vector<std::uint8_t> loadedVersionLabel(7);
 	std::vector<std::filesystem::directory_entry> filesToRemove;
-	std::string path = (getAppDataDir() +
-	                    File::getSeparatorString() +
-	                    ISO_DATA_PATH +
-	                    File::getSeparatorString())
-	                     .toStdString();
+	std::string path = (getAppDataDir() + File::getSeparatorString() + ISO_DATA_PATH + File::getSeparatorString()).toStdString();
 	nameString << std::hex << std::setfill('0') << std::setw(16) << clientNAME.get_full_name();
 
-	if ((std::filesystem::is_directory(path + nameString.str()) ||
-	     std::filesystem::exists(path + nameString.str())) &&
-	    (7 == versionLabel.size()))
+	if ((std::filesystem::is_directory(path + nameString.str()) || std::filesystem::exists(path + nameString.str())) && (7 == versionLabel.size()))
 	{
 		for (const auto &entry : std::filesystem::directory_iterator(path + nameString.str()))
 		{
@@ -462,15 +439,10 @@ bool ServerMainComponent::delete_all_versions(isobus::NAME clientNAME)
 	std::ostringstream nameString;
 	std::vector<std::uint8_t> loadedVersionLabel(7);
 	std::vector<std::filesystem::directory_entry> filesToRemove;
-	auto path = (getAppDataDir() +
-	             File::getSeparatorString() +
-	             ISO_DATA_PATH +
-	             File::getSeparatorString())
-	              .toStdString();
+	auto path = (getAppDataDir() + File::getSeparatorString() + ISO_DATA_PATH + File::getSeparatorString()).toStdString();
 	nameString << std::hex << std::setfill('0') << std::setw(16) << clientNAME.get_full_name();
 
-	if ((std::filesystem::is_directory(path + nameString.str()) ||
-	     std::filesystem::exists(path + nameString.str())))
+	if ((std::filesystem::is_directory(path + nameString.str()) || std::filesystem::exists(path + nameString.str())))
 	{
 		for (const auto &entry : std::filesystem::directory_iterator(path + nameString.str()))
 		{
@@ -535,9 +507,7 @@ void ServerMainComponent::timerCallback()
 			workingSetSelector.update_drawn_working_sets(managedWorkingSetList);
 
 			auto workingSetObject = std::static_pointer_cast<isobus::WorkingSet>(ws->get_working_set_object());
-			if ((isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress) &&
-			    (nullptr != workingSetObject) &&
-			    (workingSetObject->get_selectable()))
+			if ((isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress) && (nullptr != workingSetObject) && (workingSetObject->get_selectable()))
 			{
 				ws->set_working_set_maintenance_message_timestamp_ms(isobus::SystemTiming::get_timestamp_ms());
 				change_selected_working_set(wsIndex);
@@ -685,16 +655,17 @@ void ServerMainComponent::resized()
 	auto lBounds = getLocalBounds();
 
 	workingSetSelector.setBounds(0, lMenuBarHeight, WorkingSetSelectorComponent::WIDTH, minimum_height());
+
 	dataMaskRenderer.setBounds(WorkingSetSelectorComponent::WIDTH, lMenuBarHeight, get_data_mask_area_size_x_pixels(), get_data_mask_area_size_y_pixels());
-	vtNumberComponent.setBounds(dataMaskRenderer.getBounds().getX() + (dataMaskRenderer.getWidth() / 4.0),
-	                            dataMaskRenderer.getBounds().getY() + (dataMaskRenderer.getHeight() / 10.0),
-	                            dataMaskRenderer.getBounds().getWidth() / 2.0,
-	                            (dataMaskRenderer.getBounds().getHeight() / 10.0) * 8);
-	softKeyMaskRenderer.setBounds(WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels(),
-	                              lMenuBarHeight,
-	                              2 * SoftKeyMaskDimensions::PADDING + get_physical_soft_key_columns() * (SoftKeyMaskDimensions::PADDING + get_soft_key_descriptor_y_pixel_height()),
+
+	vtNumberComponent.setBounds(dataMaskRenderer.getBounds().getX() + (dataMaskRenderer.getWidth() / 4.0), dataMaskRenderer.getBounds().getY() + (dataMaskRenderer.getHeight() / 10.0),
+	                            dataMaskRenderer.getBounds().getWidth() / 2.0, (dataMaskRenderer.getBounds().getHeight() / 10.0) * 8);
+
+	softKeyMaskRenderer.setBounds(WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels(), lMenuBarHeight,
+	                              ((get_physical_soft_key_columns() * (get_soft_key_descriptor_y_pixel_height() + softKeyMaskDimensions.keyPadding)) + (2 * softKeyMaskDimensions.keyPadding)),
 	                              get_data_mask_area_size_y_pixels());
-	loggerViewport.setTopLeftPosition(0, minimum_height());
+
+	loggerViewport.setTopLeftPosition(0, minimum_height() + lMenuBarHeight);
 	menuBar.setBounds(lBounds.removeFromTop(lMenuBarHeight));
 	logger.setSize(loggerViewport.getWidth(), logger.getHeight());
 
@@ -834,30 +805,33 @@ bool ServerMainComponent::perform(const InvocationInfo &info)
 		{
 			retVal = true;
 			popupMenu = std::make_unique<AlertWindow>("Configure Language Command", "Use the following options to configure the units, language, and country that the VT will command from its clients.", MessageBoxIconType::NoIcon);
-			popupMenu->addTextEditor("Language Code", languageCommandInterface.get_language_code(), "Language Code");
-			popupMenu->addTextEditor("Country Code", languageCommandInterface.get_country_code(), "Country Code");
-			popupMenu->addComboBox("Area Units", { "Metric", "Imperial/US" }, "Area Units");
-			popupMenu->addComboBox("Date Format", { "ddmmyyyy", "ddyyyymm", "mmyyyydd", "mmddyyyy", "yyyymmdd", "yyyyddmm" }, "Date Format");
-			popupMenu->addComboBox("Decimal Symbol", { "Comma", "Point" }, "Decimal Symbol");
-			popupMenu->addComboBox("Distance Units", { "Metric", "Imperial/US" }, "Distance Units");
-			popupMenu->addComboBox("Force Units", { "Metric", "Imperial/US" }, "Force Units");
-			popupMenu->addComboBox("Generic Units", { "Metric", "Imperial", "US" }, "Generic Units");
-			popupMenu->addComboBox("Mass Units", { "Metric", "Imperial", "US" }, "Mass Units");
-			popupMenu->addComboBox("Pressure Units", { "Metric", "Imperial/US" }, "Pressure Units");
-			popupMenu->addComboBox("Temperature Units", { "Metric", "Imperial/US" }, "Temperature Units");
-			popupMenu->addComboBox("Time Format", { "24 hour", "12 hour" }, "Time Format");
-			popupMenu->addComboBox("Volume Units", { "Metric", "Imperial", "US" }, "Volume Units ");
-			popupMenu->getComboBoxComponent("Area Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_area_units()));
-			popupMenu->getComboBoxComponent("Date Format")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_date_format()));
-			popupMenu->getComboBoxComponent("Decimal Symbol")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_decimal_symbol()));
-			popupMenu->getComboBoxComponent("Distance Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_distance_units()));
-			popupMenu->getComboBoxComponent("Force Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_force_units()));
-			popupMenu->getComboBoxComponent("Generic Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_generic_units()));
-			popupMenu->getComboBoxComponent("Mass Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_mass_units()));
-			popupMenu->getComboBoxComponent("Pressure Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_pressure_units()));
-			popupMenu->getComboBoxComponent("Temperature Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_temperature_units()));
-			popupMenu->getComboBoxComponent("Time Format")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_time_format()));
-			popupMenu->getComboBoxComponent("Volume Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_volume_units()));
+			
+			popupMenu->addTextEditor("Language_Code", languageCommandInterface.get_language_code(), "Language Code");
+			popupMenu->addTextEditor("Country_Code", languageCommandInterface.get_country_code(), "Country Code");
+			popupMenu->addComboBox("Area_Units", { "Metric", "Imperial/US" }, "Area Units");
+			popupMenu->addComboBox("Date_Format", { "ddmmyyyy", "ddyyyymm", "mmyyyydd", "mmddyyyy", "yyyymmdd", "yyyyddmm" }, "Date Format");
+			popupMenu->addComboBox("Decimal_Symbol", { "Comma", "Point" }, "Decimal Symbol");
+			popupMenu->addComboBox("Distance_Units", { "Metric", "Imperial/US" }, "Distance Units");
+			popupMenu->addComboBox("Force_Units", { "Metric", "Imperial/US" }, "Force Units");
+			popupMenu->addComboBox("Generic_Units", { "Metric", "Imperial", "US" }, "Generic Units");
+			popupMenu->addComboBox("Mass_Units", { "Metric", "Imperial", "US" }, "Mass Units");
+			popupMenu->addComboBox("Pressure_Units", { "Metric", "Imperial/US" }, "Pressure Units");
+			popupMenu->addComboBox("Temperature_Units", { "Metric", "Imperial/US" }, "Temperature Units");
+			popupMenu->addComboBox("Time_Format", { "24 hour", "12 hour" }, "Time Format");
+			popupMenu->addComboBox("Volume_Units", { "Metric", "Imperial", "US" }, "Volume Units");
+
+			popupMenu->getComboBoxComponent("Area_Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_area_units()));
+			popupMenu->getComboBoxComponent("Date_Format")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_date_format()));
+			popupMenu->getComboBoxComponent("Decimal_Symbol")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_decimal_symbol()));
+			popupMenu->getComboBoxComponent("Distance_Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_distance_units()));
+			popupMenu->getComboBoxComponent("Force_Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_force_units()));
+			popupMenu->getComboBoxComponent("Generic_Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_generic_units()));
+			popupMenu->getComboBoxComponent("Mass_Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_mass_units()));
+			popupMenu->getComboBoxComponent("Pressure_Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_pressure_units()));
+			popupMenu->getComboBoxComponent("Temperature_Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_temperature_units()));
+			popupMenu->getComboBoxComponent("Time_Format")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_time_format()));
+			popupMenu->getComboBoxComponent("Volume_Units")->setSelectedItemIndex(static_cast<int>(languageCommandInterface.get_commanded_volume_units()));
+
 			popupMenu->addButton("OK", 1, KeyPress(KeyPress::returnKey, 0, 0));
 			popupMenu->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey, 0, 0));
 			popupMenu->enterModalState(true, ModalCallbackFunction::create(LanguageCommandConfigClosed{ *this }));
@@ -867,10 +841,12 @@ bool ServerMainComponent::perform(const InvocationInfo &info)
 		case static_cast<int>(CommandIDs::ConfigureReportedVersion):
 		{
 			popupMenu = std::make_unique<AlertWindow>("Configure Reported VT Server Version", "You can use this setting to change the version of the ISO11783-6 standard that this server will claim to support in its status messages.", MessageBoxIconType::NoIcon);
-			popupMenu->addComboBox("Version", { "Version 2 or Older", "Version 3", "Version 4", "Version 5", "Version 6" });
+			
+			popupMenu->addComboBox("VT_Version", { "Version 2 or Older", "Version 3", "Version 4", "Version 5", "Version 6" });
+			popupMenu->getComboBoxComponent("VT_Version")->setSelectedItemIndex(static_cast<int>(versionToReport));
+
 			popupMenu->addButton("OK", 2, KeyPress(KeyPress::returnKey, 0, 0));
 			popupMenu->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey, 0, 0));
-			popupMenu->getComboBoxComponent("Version")->setSelectedItemIndex(static_cast<int>(versionToReport));
 			popupMenu->enterModalState(true, ModalCallbackFunction::create(LanguageCommandConfigClosed{ *this }));
 			retVal = true;
 		}
@@ -879,19 +855,20 @@ bool ServerMainComponent::perform(const InvocationInfo &info)
 		case static_cast<int>(CommandIDs::ConfigureReportedHardware):
 		{
 			popupMenu = std::make_unique<AlertWindow>("Configure Reported VT Capabilities", "You can use this menu to configure what the server will report to clients in the \"get hardware\" message response, as well as what will be displayed in the data/soft key mask render components of this application. Some of these settings may require you to close and reopen the application to avoid weird discrepancies with connected clients.", MessageBoxIconType::NoIcon);
-			popupMenu->addTextEditor("VT number", String(vtNumber), "VT number (1-32, only applied on restart)");
-			popupMenu->addTextEditor("Data Mask Size (height and width)", String(dataMaskRenderer.getWidth()), "Data Mask Size (height and width)");
-			popupMenu->addTextEditor("Soft Key Designator Height", String(get_soft_key_descriptor_y_pixel_height()), "Soft Key Designator Height (min 60)");
-			popupMenu->addTextEditor("Soft Key Designator Width", String(get_soft_key_descriptor_x_pixel_width()), "Soft Key Designator Width (min 60)");
-			popupMenu->addTextEditor("Number of Physical Soft Key columns", String(get_physical_soft_key_columns()), "Number of Physical Soft Key columns (min 1)");
-			popupMenu->addTextEditor("Number of Physical Soft Key rows", String(get_physical_soft_key_rows()), "Number of Physical Soft Key rows (min 1)");
+			
+			popupMenu->addTextEditor("VT_Number", String(vtNumber), "VT Number (1-32, only applied on restart)");
+			popupMenu->addTextEditor("DataMask_RenderAreaSize", String(dataMaskRenderer.getWidth()), "Data Mask Size (height and width)");
+			popupMenu->addTextEditor("SoftKey_DesignatorHeight", String(get_soft_key_descriptor_y_pixel_height()), "Soft Key Designator Height (min 60)");
+			popupMenu->addTextEditor("SoftKey_DesignatorWidth", String(get_soft_key_descriptor_x_pixel_width()), "Soft Key Designator Width (min 60)");
+			popupMenu->addTextEditor("SoftKey_ColumnCount", String(get_physical_soft_key_columns()), "Number of Physical Soft Key columns (min 1)");
+			popupMenu->addTextEditor("SoftKey_RowCount", String(get_physical_soft_key_rows()), "Number of Physical Soft Key rows (min 1)");
 
-			popupMenu->getTextEditor("VT number")->setInputRestrictions(2, "1234567890");
-			popupMenu->getTextEditor("Data Mask Size (height and width)")->setInputRestrictions(4, "1234567890");
-			popupMenu->getTextEditor("Soft Key Designator Height")->setInputRestrictions(4, "1234567890");
-			popupMenu->getTextEditor("Soft Key Designator Width")->setInputRestrictions(4, "1234567890");
-			popupMenu->getTextEditor("Number of Physical Soft Key columns")->setInputRestrictions(1, "1234567890");
-			popupMenu->getTextEditor("Number of Physical Soft Key rows")->setInputRestrictions(2, "1234567890");
+			popupMenu->getTextEditor("VT_Number")->setInputRestrictions(2, "1234567890");
+			popupMenu->getTextEditor("DataMask_RenderAreaSize")->setInputRestrictions(4, "1234567890");
+			popupMenu->getTextEditor("SoftKey_DesignatorHeight")->setInputRestrictions(4, "1234567890");
+			popupMenu->getTextEditor("SoftKey_DesignatorWidth")->setInputRestrictions(4, "1234567890");
+			popupMenu->getTextEditor("SoftKey_ColumnCount")->setInputRestrictions(1, "1234567890");
+			popupMenu->getTextEditor("SoftKey_RowCount")->setInputRestrictions(2, "1234567890");
 
 			popupMenu->addButton("OK", 3, KeyPress(KeyPress::returnKey, 0, 0));
 			popupMenu->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey, 0, 0));
@@ -903,15 +880,19 @@ bool ServerMainComponent::perform(const InvocationInfo &info)
 		case static_cast<int>(CommandIDs::ConfigureLogging):
 		{
 			popupMenu = std::make_unique<AlertWindow>("Configure Logging", "", MessageBoxIconType::NoIcon);
+			
 			popupMenu->addTextBlock("Select a logging level. The logging level affects what's shown in the logging area, and what is written to the log file. Setting logging to \"debug\" may impact performance.");
-			popupMenu->addComboBox("Logging Level", { "Debug", "Info", "Warning", "Error", "Critical" });
-			popupMenu->getComboBoxComponent("Logging Level")->setSelectedItemIndex(static_cast<int>(isobus::CANStackLogger::get_log_level()));
+			popupMenu->addComboBox("Logging_Level", { "Debug", "Info", "Warning", "Error", "Critical" });
+			popupMenu->getComboBoxComponent("Logging_Level")->setSelectedItemIndex(static_cast<int>(isobus::CANStackLogger::get_log_level()));
+
 			popupMenu->addTextBlock("Select if the log window should be shown or hidden. Showing the log window may affect performance.");
-			popupMenu->addComboBox("Logging Window", { "Hidden", "Enabled" });
-			popupMenu->getComboBoxComponent("Logging Window")->setSelectedItemIndex(loggerViewport.isVisible() ? 1 : 0);
+			popupMenu->addComboBox("Logging_Window", { "Hidden", "Enabled" });
+			popupMenu->getComboBoxComponent("Logging_Window")->setSelectedItemIndex(loggerViewport.isVisible() ? 1 : 0);
+
 			popupMenu->addTextBlock("Save IOP data before parsing. This allows providing IOP data for debugging parser crashes.");
-			popupMenu->addComboBox("Save IOP data before parsing", { "No", "Yes" });
-			popupMenu->getComboBoxComponent("Save IOP data before parsing")->setSelectedItemIndex(saveIopBeforeParse ? 1 : 0);
+			popupMenu->addComboBox("SaveIop_BeforeParse", { "No", "Yes" });
+			popupMenu->getComboBoxComponent("SaveIop_BeforeParse")->setSelectedItemIndex(saveIopBeforeParse ? 1 : 0);
+
 			popupMenu->addButton("OK", 4, KeyPress(KeyPress::returnKey, 0, 0));
 			popupMenu->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey, 0, 0));
 			popupMenu->enterModalState(true, ModalCallbackFunction::create(LanguageCommandConfigClosed{ *this }));
@@ -961,22 +942,14 @@ bool ServerMainComponent::perform(const InvocationInfo &info)
 				auto currentTime = Time::getCurrentTime().toString(true, true, true, false);
 				currentTime = currentTime.replaceCharacter(' ', '_');
 				currentTime = currentTime.replaceCharacter(':', '_');
-				const String fileName = getAppDataDir() +
-				  File::getSeparatorString() +
-				  "AgISOVirtualTerminalLogs_" +
-				  currentTime +
-				  ".zip";
+				const String fileName = getAppDataDir() + File::getSeparatorString() + "AgISOVirtualTerminalLogs_" + currentTime + ".zip";
 				auto output = File(fileName).createOutputStream();
 				diagnosticFileBuilder->writeToStream(*output.get(), nullptr);
 				File(fileName).revealToUser();
 			}
 			else
 			{
-				AlertWindow::showAsync(MessageBoxOptions()
-				                         .withIconType(MessageBoxIconType::WarningIcon)
-				                         .withTitle("Export Failed")
-				                         .withButton("OK"),
-				                       nullptr);
+				AlertWindow::showAsync(MessageBoxOptions().withIconType(MessageBoxIconType::WarningIcon).withTitle("Export Failed").withButton("OK"), nullptr);
 			}
 			retVal = true;
 		}
@@ -1016,13 +989,7 @@ bool ServerMainComponent::perform(const InvocationInfo &info)
 			auto currentTime = Time::getCurrentTime().toString(true, true, true, false);
 			currentTime = currentTime.replaceCharacter(' ', '_');
 			currentTime = currentTime.replaceCharacter(':', '_');
-			const String fileName = File::getSpecialLocation(File::userApplicationDataDirectory).getFullPathName() +
-			  File::getSeparatorString() +
-			  "Open-Agriculture" +
-			  File::getSeparatorString() +
-			  "AgISOVirtualTerminalLogs_" +
-			  currentTime +
-			  ".zip";
+			const String fileName = File::getSpecialLocation(File::userApplicationDataDirectory).getFullPathName() + File::getSeparatorString() + "Open-Agriculture" + File::getSeparatorString() + "AgISOVirtualTerminalLogs_" + currentTime + ".zip";
 			auto output = File(fileName).createOutputStream();
 			diagnosticFileBuilder->writeToStream(*output.get(), nullptr);
 			File(fileName).revealToUser();
@@ -1194,8 +1161,7 @@ std::shared_ptr<isobus::ControlFunction> ServerMainComponent::get_client_control
 
 void ServerMainComponent::change_selected_working_set(std::uint8_t index)
 {
-	if ((index < managedWorkingSetList.size()) &&
-	    (nullptr != managedWorkingSetList.at(index)->get_working_set_object()) &&
+	if ((index < managedWorkingSetList.size()) && (nullptr != managedWorkingSetList.at(index)->get_working_set_object()) &&
 	    (std::static_pointer_cast<isobus::WorkingSet>(managedWorkingSetList.at(index)->get_working_set_object())->get_selectable()))
 	{
 		bool lProcessActivateDeactivateMacros = false;
@@ -1292,19 +1258,19 @@ void ServerMainComponent::LanguageCommandConfigClosed::operator()(int result) co
 	{
 		case 1: // Save Language Command
 		{
-			auto languageCode = mParent.popupMenu->getTextEditorContents("Language Code");
-			auto countryCode = mParent.popupMenu->getTextEditorContents("Country Code");
-			auto areaUnits = static_cast<isobus::LanguageCommandInterface::AreaUnits>(mParent.popupMenu->getComboBoxComponent("Area Units")->getSelectedItemIndex());
-			auto dateFormat = static_cast<isobus::LanguageCommandInterface::DateFormats>(mParent.popupMenu->getComboBoxComponent("Date Format")->getSelectedItemIndex());
-			auto decimalSymbol = static_cast<isobus::LanguageCommandInterface::DecimalSymbols>(mParent.popupMenu->getComboBoxComponent("Decimal Symbol")->getSelectedItemIndex());
-			auto distanceUnits = static_cast<isobus::LanguageCommandInterface::DistanceUnits>(mParent.popupMenu->getComboBoxComponent("Distance Units")->getSelectedItemIndex());
-			auto forceUnits = static_cast<isobus::LanguageCommandInterface::ForceUnits>(mParent.popupMenu->getComboBoxComponent("Force Units")->getSelectedItemIndex());
-			auto genericUnits = static_cast<isobus::LanguageCommandInterface::UnitSystem>(mParent.popupMenu->getComboBoxComponent("Generic Units")->getSelectedItemIndex());
-			auto massUnits = static_cast<isobus::LanguageCommandInterface::MassUnits>(mParent.popupMenu->getComboBoxComponent("Mass Units")->getSelectedItemIndex());
-			auto pressureUnits = static_cast<isobus::LanguageCommandInterface::PressureUnits>(mParent.popupMenu->getComboBoxComponent("Pressure Units")->getSelectedItemIndex());
-			auto temperatureUnits = static_cast<isobus::LanguageCommandInterface::TemperatureUnits>(mParent.popupMenu->getComboBoxComponent("Temperature Units")->getSelectedItemIndex());
-			auto timeFormat = static_cast<isobus::LanguageCommandInterface::TimeFormats>(mParent.popupMenu->getComboBoxComponent("Time Format")->getSelectedItemIndex());
-			auto volumeUnits = static_cast<isobus::LanguageCommandInterface::VolumeUnits>(mParent.popupMenu->getComboBoxComponent("Volume Units")->getSelectedItemIndex());
+			auto languageCode = mParent.popupMenu->getTextEditorContents("Language_Code");
+			auto countryCode = mParent.popupMenu->getTextEditorContents("Country_Code");
+			auto areaUnits = static_cast<isobus::LanguageCommandInterface::AreaUnits>(mParent.popupMenu->getComboBoxComponent("Area_Units")->getSelectedItemIndex());
+			auto dateFormat = static_cast<isobus::LanguageCommandInterface::DateFormats>(mParent.popupMenu->getComboBoxComponent("Date_Format")->getSelectedItemIndex());
+			auto decimalSymbol = static_cast<isobus::LanguageCommandInterface::DecimalSymbols>(mParent.popupMenu->getComboBoxComponent("Decimal_Symbol")->getSelectedItemIndex());
+			auto distanceUnits = static_cast<isobus::LanguageCommandInterface::DistanceUnits>(mParent.popupMenu->getComboBoxComponent("Distance_Units")->getSelectedItemIndex());
+			auto forceUnits = static_cast<isobus::LanguageCommandInterface::ForceUnits>(mParent.popupMenu->getComboBoxComponent("Force_Units")->getSelectedItemIndex());
+			auto genericUnits = static_cast<isobus::LanguageCommandInterface::UnitSystem>(mParent.popupMenu->getComboBoxComponent("Generic_Units")->getSelectedItemIndex());
+			auto massUnits = static_cast<isobus::LanguageCommandInterface::MassUnits>(mParent.popupMenu->getComboBoxComponent("Mass_Units")->getSelectedItemIndex());
+			auto pressureUnits = static_cast<isobus::LanguageCommandInterface::PressureUnits>(mParent.popupMenu->getComboBoxComponent("Pressure_Units")->getSelectedItemIndex());
+			auto temperatureUnits = static_cast<isobus::LanguageCommandInterface::TemperatureUnits>(mParent.popupMenu->getComboBoxComponent("Temperature_Units")->getSelectedItemIndex());
+			auto timeFormat = static_cast<isobus::LanguageCommandInterface::TimeFormats>(mParent.popupMenu->getComboBoxComponent("Time_Format")->getSelectedItemIndex());
+			auto volumeUnits = static_cast<isobus::LanguageCommandInterface::VolumeUnits>(mParent.popupMenu->getComboBoxComponent("Volume_Units")->getSelectedItemIndex());
 
 			mParent.languageCommandInterface.set_language_code(languageCode.toStdString());
 			mParent.languageCommandInterface.set_country_code(countryCode.toStdString());
@@ -1322,38 +1288,40 @@ void ServerMainComponent::LanguageCommandConfigClosed::operator()(int result) co
 			mParent.languageCommandInterface.send_language_command();
 
 			mParent.save_settings();
+			mParent.repaint_data_and_soft_key_mask();
 		}
 		break;
 
 		case 2: // Save Version
 		{
-			auto version = mParent.popupMenu->getComboBoxComponent("Version")->getSelectedItemIndex() + 2;
+			auto version = mParent.popupMenu->getComboBoxComponent("VT_Version")->getSelectedItemIndex() + 2;
 			mParent.versionToReport = get_version_from_setting(version);
 
 			mParent.save_settings();
+			mParent.repaint_data_and_soft_key_mask();
 		}
 		break;
 
 		case 3: // Save Reported Hardware
 		{
-			auto dataMaskSize = mParent.popupMenu->getTextEditorContents("Data Mask Size (height and width)");
+			auto dataMaskSize = mParent.popupMenu->getTextEditorContents("DataMask_RenderAreaSize");
 			mParent.dataMaskRenderer.setSize(dataMaskSize.getIntValue(), dataMaskSize.getIntValue());
 			mParent.softKeyMaskRenderer.setTopLeftPosition(100 + dataMaskSize.getIntValue(), 4 + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight());
 
-			mParent.softKeyMaskDimensions.columnCount = mParent.popupMenu->getTextEditorContents("Number of Physical Soft Key columns").getIntValue();
-			mParent.softKeyMaskDimensions.rowCount = mParent.popupMenu->getTextEditorContents("Number of Physical Soft Key rows").getIntValue();
+			mParent.softKeyMaskDimensions.keyColumnCount = mParent.popupMenu->getTextEditorContents("SoftKey_ColumnCount").getIntValue();
+			mParent.softKeyMaskDimensions.keyRowCount = mParent.popupMenu->getTextEditorContents("SoftKey_RowCount").getIntValue();
 			if (mParent.get_number_of_physical_soft_keys() != mParent.softKeyMaskDimensions.key_count())
 			{
-				mParent.softKeyMaskDimensions.rowCount = (mParent.get_number_of_physical_soft_keys() / mParent.softKeyMaskDimensions.columnCount);
+				mParent.softKeyMaskDimensions.keyRowCount = (mParent.get_number_of_physical_soft_keys() / mParent.softKeyMaskDimensions.keyColumnCount);
 			}
 
-			mParent.softKeyMaskDimensions.keyWidth = mParent.popupMenu->getTextEditorContents("Soft Key Designator Width").getIntValue();
-			mParent.softKeyMaskDimensions.keyHeight = mParent.popupMenu->getTextEditorContents("Soft Key Designator Height").getIntValue();
+			mParent.softKeyMaskDimensions.keyWidth = mParent.popupMenu->getTextEditorContents("SoftKey_DesignatorWidth").getIntValue();
+			mParent.softKeyMaskDimensions.keyHeight = mParent.popupMenu->getTextEditorContents("SoftKey_DesignatorHeight").getIntValue();
 			JuceManagedWorkingSetCache::set_softkey_mask_dimension_info(mParent.softKeyMaskDimensions);
 
 			mParent.softKeyMaskRenderer.setSize(mParent.softKeyMaskDimensions.total_width(), dataMaskSize.getIntValue());
 
-			mParent.vtNumber = mParent.popupMenu->getTextEditorContents("VT Number").getIntValue();
+			mParent.vtNumber = mParent.popupMenu->getTextEditorContents("VT_Number").getIntValue();
 			if (mParent.vtNumber > 32)
 			{
 				mParent.vtNumber = 32;
@@ -1370,8 +1338,8 @@ void ServerMainComponent::LanguageCommandConfigClosed::operator()(int result) co
 
 		case 4: // Log level
 		{
-			isobus::CANStackLogger::set_log_level(static_cast<isobus::CANStackLogger::LoggingLevel>(mParent.popupMenu->getComboBoxComponent("Logging Level")->getSelectedItemIndex()));
-			if (mParent.popupMenu->getComboBoxComponent("Logging Window")->getSelectedItemIndex() == 1)
+			isobus::CANStackLogger::set_log_level(static_cast<isobus::CANStackLogger::LoggingLevel>(mParent.popupMenu->getComboBoxComponent("Logging_Level")->getSelectedItemIndex()));
+			if (mParent.popupMenu->getComboBoxComponent("Logging_Window")->getSelectedItemIndex() == 1)
 			{
 				mParent.logger.setVisible(true);
 				mParent.loggerViewport.setVisible(true);
@@ -1382,8 +1350,9 @@ void ServerMainComponent::LanguageCommandConfigClosed::operator()(int result) co
 				mParent.loggerViewport.setVisible(false);
 			}
 
-			mParent.saveIopBeforeParse = (mParent.popupMenu->getComboBoxComponent("Save IOP data before parsing")->getSelectedItemIndex() == 1);
+			mParent.saveIopBeforeParse = (mParent.popupMenu->getComboBoxComponent("SaveIop_BeforeParse")->getSelectedItemIndex() == 1);
 			mParent.save_settings();
+			mParent.repaint_data_and_soft_key_mask();
 		}
 		break;
 
@@ -1394,67 +1363,58 @@ void ServerMainComponent::LanguageCommandConfigClosed::operator()(int result) co
 		}
 
 		default:
-		{
-			// Cancel. Do nothing
-		}
-		break;
+		    break;
 	}
+
 	mParent.exitModalState(result);
 	mParent.popupMenu.reset();
 }
 
 ServerMainComponent::HeldButtonData::HeldButtonData(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingSet, std::uint16_t objectID, std::uint16_t maskObjectID, std::uint8_t keyCode, bool isSoftKey) :
-  isSoftKey(isSoftKey),
-  associatedWorkingSet(workingSet),
-  timestamp_ms(isobus::SystemTiming::get_timestamp_ms()),
-  buttonObjectID(objectID),
-  activeMaskObjectID(maskObjectID),
-  buttonKeyCode(keyCode)
+  isSoftKey(isSoftKey), associatedWorkingSet(workingSet), timestamp_ms(isobus::SystemTiming::get_timestamp_ms()), buttonObjectID(objectID), activeMaskObjectID(maskObjectID), buttonKeyCode(keyCode)
 {
 }
 
 bool ServerMainComponent::HeldButtonData::operator==(const HeldButtonData &other) const
 {
-	return ((other.activeMaskObjectID == activeMaskObjectID) &&
-	        (other.associatedWorkingSet == associatedWorkingSet) &&
-	        (other.buttonObjectID == buttonObjectID) &&
-	        (other.buttonKeyCode == buttonKeyCode));
+	return ((other.activeMaskObjectID == activeMaskObjectID) && (other.associatedWorkingSet == associatedWorkingSet) && (other.buttonObjectID == buttonObjectID) && (other.buttonKeyCode == buttonKeyCode));
 }
 
 ServerMainComponent::VTVersion ServerMainComponent::get_version_from_setting(std::uint8_t aVersion)
 {
-	VTVersion retVal = VTVersion::Version2OrOlder;
+	isobus::VirtualTerminalBase::VTVersion retVal = isobus::VirtualTerminalBase::VTVersion::Version2OrOlder;
 
 	switch (aVersion)
 	{
 		case 3:
 		{
-			retVal = VTVersion::Version3;
+			retVal = isobus::VirtualTerminalBase::VTVersion::Version3;
 		}
 		break;
 
 		case 4:
 		{
-			retVal = VTVersion::Version4;
+			retVal = isobus::VirtualTerminalBase::VTVersion::Version4;
 		}
 		break;
 
 		case 5:
 		{
-			retVal = VTVersion::Version5;
+			retVal = isobus::VirtualTerminalBase::VTVersion::Version5;
 		}
 		break;
 
 		case 6:
 		{
-			retVal = VTVersion::Version6;
+			retVal = isobus::VirtualTerminalBase::VTVersion::Version6;
 		}
 		break;
 
 		default:
 			break;
 	}
-	return retVal;
+
+	return (retVal);
 }
 
 std::size_t ServerMainComponent::number_of_iop_files_in_directory(std::filesystem::path path)
@@ -1468,6 +1428,7 @@ std::size_t ServerMainComponent::number_of_iop_files_in_directory(std::filesyste
 			retVal++;
 		}
 	}
+
 	return retVal;
 }
 
@@ -1492,6 +1453,7 @@ bool ServerMainComponent::timeAndDateCallback(isobus::TimeDateInterface::TimeAnd
 	std::tm utcTime = *std::gmtime(&t);
 	timeAndDate.localHourOffset = static_cast<std::int8_t>(localTime.tm_hour - utcTime.tm_hour);
 	timeAndDate.localMinuteOffset = static_cast<std::int8_t>(localTime.tm_min - utcTime.tm_min);
+
 	return true;
 }
 
@@ -1502,18 +1464,16 @@ void ServerMainComponent::transferred_object_pool_parse_start(std::shared_ptr<is
 		return;
 	}
 
-	auto debugIopSavePath = juce::String(File::getSpecialLocation(File::userApplicationDataDirectory).getFullPathName().toStdString() +
-	                                     File::getSeparatorString() +
-	                                     "Open-Agriculture" +
-	                                     File::getSeparatorString() + "debug.iop")
-	                          .toStdString();
+	auto debugIopSavePath = juce::String(File::getSpecialLocation(File::userApplicationDataDirectory).getFullPathName().toStdString() + File::getSeparatorString() + "Open-Agriculture" + File::getSeparatorString() + "debug.iop").toStdString();
 
 	LOG_INFO("[WS]: Saving IOP data to  %s before parsing", debugIopSavePath.c_str());
 	std::ofstream fs(debugIopSavePath, std::ios::out | std::ios::binary);
+
 	for (auto i = 0; i < workingSet->get_number_iop_files(); i++)
 	{
 		fs.write(reinterpret_cast<const char *>(workingSet->get_iop_raw_data(i).data()), static_cast<std::streamsize>(workingSet->get_iop_raw_data(i).size()));
 	}
+
 	fs.close();
 }
 
@@ -1573,6 +1533,7 @@ void ServerMainComponent::on_change_active_mask_callback(std::shared_ptr<isobus:
 					default:
 						break;
 				}
+
 				process_macro(activeMask, isobus::EventID::OnShow, isobus::VirtualTerminalObjectType::AlarmMask, activeWorkingSet);
 				process_macro(activeMask, isobus::EventID::OnChangeActiveMask, isobus::VirtualTerminalObjectType::AlarmMask, activeWorkingSet);
 			}
@@ -1590,9 +1551,86 @@ void ServerMainComponent::on_change_active_mask_callback(std::shared_ptr<isobus:
 
 void ServerMainComponent::repaint_data_and_soft_key_mask()
 {
+	// isobus::CANStackLogger::info("1. getWidth(): " + std::to_string(getWidth()) + "getHeight(): " + std::to_string(getHeight()));
+
+	// isobus::CANStackLogger::info("1. Width: " + std::to_string((WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10)));
+	// isobus::CANStackLogger::info("1. Height: " + std::to_string((minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + LoggerComponent::HEIGHT)));
+
+	if (loggerViewport.isVisible())
+	{
+		if (getWidth() < (WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10) &&
+		    getHeight() < (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + LoggerComponent::HEIGHT))
+		{
+			setSize(WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10,
+			        minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + LoggerComponent::HEIGHT);
+
+			loggerViewport.setSize(getWidth(), LoggerComponent::HEIGHT);
+			logger.setSize(getWidth(), LoggerComponent::HEIGHT);
+		}
+		else if (getWidth() >= (WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10) &&
+		    getHeight() < (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + LoggerComponent::HEIGHT))
+		{
+			setSize(getWidth(), minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + LoggerComponent::HEIGHT);
+
+			loggerViewport.setSize(getWidth(), LoggerComponent::HEIGHT);
+			logger.setSize(getWidth(), LoggerComponent::HEIGHT);
+		}
+		else if (getWidth() < (WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10) &&
+		    getHeight() >= (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + LoggerComponent::HEIGHT))
+		{
+			setSize(WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10, getHeight());
+
+			loggerViewport.setSize(getWidth(), (getHeight() - (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight())));
+			logger.setSize(getWidth(), (getHeight() - (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight())));
+		}
+		else
+		{
+			setSize(getWidth(), getHeight());
+
+			loggerViewport.setSize(getWidth(), (getHeight() - (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight())));
+			logger.setSize(getWidth(), (getHeight() - (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight())));
+		}
+	}
+	else
+	{
+		if ((getWidth() < (WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10)) &&
+		    (getHeight() < (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + 10)))
+		{
+			setSize(WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10,
+			        minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + 10);
+
+			loggerViewport.setSize(0, 0);
+			logger.setSize(0, 0);
+		}
+		else if ((getWidth() >= (WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10)) &&
+		    (getHeight() < (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + 10)))
+		{
+			setSize(getWidth(), minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + 10);
+
+			loggerViewport.setSize(0, 0);
+			logger.setSize(0, 0);
+		}
+		else if ((getWidth() < (WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10)) &&
+		    (getHeight() >= (minimum_height() + juce::LookAndFeel::getDefaultLookAndFeel().getDefaultMenuBarHeight() + 10)))
+		{
+			setSize(WorkingSetSelectorComponent::WIDTH + get_data_mask_area_size_x_pixels() + softKeyMaskDimensions.total_width() + 10, getHeight());
+
+			loggerViewport.setSize(0, 0);
+			logger.setSize(0, 0);
+		}
+		else
+		{
+			setSize(getWidth(), getHeight());
+
+			loggerViewport.setSize(0, 0);
+			logger.setSize(0, 0);
+		}
+	}
+
 	dataMaskRenderer.on_change_active_mask(activeWorkingSet);
 	softKeyMaskRenderer.on_change_active_mask(activeWorkingSet);
 	workingSetSelector.redraw();
+	resized();
 }
 
 void ServerMainComponent::check_load_settings(std::shared_ptr<ValueTree> settings)
@@ -1659,9 +1697,9 @@ void ServerMainComponent::check_load_settings(std::shared_ptr<ValueTree> setting
 		}
 		else if (Identifier("Compatibility") == child.getType())
 		{
-			if (!child.getProperty("Version").isVoid())
+			if (!child.getProperty("VTVersion").isVoid())
 			{
-				versionToReport = get_version_from_setting(static_cast<std::uint8_t>(static_cast<int>(child.getProperty("Version"))));
+				versionToReport = get_version_from_setting(static_cast<std::uint8_t>(static_cast<int>(child.getProperty("VTVersion"))));
 			}
 		}
 		else if (Identifier("Hardware") == child.getType())
@@ -1669,24 +1707,30 @@ void ServerMainComponent::check_load_settings(std::shared_ptr<ValueTree> setting
 			if (!child.getProperty("SoftKeyDesignatorWidth").isVoid())
 			{
 				softKeyMaskDimensions.keyWidth = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftKeyDesignatorWidth")));
+				softKeyMaskRenderer.softKeyMaskDimensions.keyWidth = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftKeyDesignatorWidth")));
 			}
 			if (!child.getProperty("SoftKeyDesignatorHeight").isVoid())
 			{
 				softKeyMaskDimensions.keyHeight = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftKeyDesignatorHeight")));
+				softKeyMaskRenderer.softKeyMaskDimensions.keyHeight = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftKeyDesignatorHeight")));
 			}
 			if (!child.getProperty("SoftkeyColumnCount").isVoid())
 			{
-				softKeyMaskDimensions.columnCount = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftkeyColumnCount")));
+				softKeyMaskDimensions.keyColumnCount = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftkeyColumnCount")));
+				softKeyMaskRenderer.softKeyMaskDimensions.keyColumnCount = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftkeyColumnCount")));
 			}
 			if (!child.getProperty("SoftkeyRowCount").isVoid())
 			{
-				softKeyMaskDimensions.rowCount = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftkeyRowCount")));
+				softKeyMaskDimensions.keyRowCount = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftkeyRowCount")));
+				softKeyMaskRenderer.softKeyMaskDimensions.keyRowCount = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("SoftkeyRowCount")));
 			}
 			if (!child.getProperty("DataMaskRenderAreaSize").isVoid())
 			{
 				dataMaskRenderer.setSize(static_cast<std::uint16_t>(static_cast<int>(child.getProperty("DataMaskRenderAreaSize"))), static_cast<std::uint16_t>(static_cast<int>(child.getProperty("DataMaskRenderAreaSize"))));
-				softKeyMaskRenderer.setSize(2 * SoftKeyMaskDimensions::PADDING + get_physical_soft_key_columns() * (SoftKeyMaskDimensions::PADDING + get_soft_key_descriptor_y_pixel_height()),
+				softKeyMaskRenderer.setSize(((get_physical_soft_key_columns() * (get_soft_key_descriptor_y_pixel_height() + softKeyMaskRenderer.softKeyMaskDimensions.keyPadding)) + (2 * softKeyMaskRenderer.softKeyMaskDimensions.keyPadding)),
 				                            static_cast<int>(child.getProperty("DataMaskRenderAreaSize")));
+
+				softKeyMaskRenderer.softKeyMaskDimensions.height = static_cast<std::uint16_t>(static_cast<int>(child.getProperty("DataMaskRenderAreaSize")));
 			}
 #ifdef JUCE_WINDOWS
 			if (!child.getProperty("TouCANSerial").isVoid())
@@ -1721,13 +1765,14 @@ void ServerMainComponent::check_load_settings(std::shared_ptr<ValueTree> setting
 		}
 		else if (Identifier("Logging") == child.getType())
 		{
-			if ((!child.getProperty("Level").isVoid()) && (static_cast<int>(child.getProperty("Level")) <= static_cast<int>(isobus::CANStackLogger::LoggingLevel::Critical)))
+			if ((!child.getProperty("LoggingLevel").isVoid()) && (static_cast<int>(child.getProperty("LoggingLevel")) <= static_cast<int>(isobus::CANStackLogger::LoggingLevel::Critical)))
 			{
-				isobus::CANStackLogger::set_log_level(static_cast<isobus::CANStackLogger::LoggingLevel>(static_cast<int>(child.getProperty("Level"))));
+				isobus::CANStackLogger::set_log_level(static_cast<isobus::CANStackLogger::LoggingLevel>(static_cast<int>(child.getProperty("LoggingLevel"))));
 			}
-			if (!child.getProperty("Shown").isVoid())
+
+			if (!child.getProperty("LoggingWindow").isVoid())
 			{
-				auto shown = static_cast<int>(child.getProperty("Shown"));
+				auto shown = static_cast<int>(child.getProperty("LoggingWindow"));
 
 				logger.setVisible(shown);
 				loggerViewport.setVisible(shown);
@@ -1814,6 +1859,9 @@ void ServerMainComponent::save_settings()
 			}
 		}
 
+		languageCommandSettings.setProperty("LanguageCode", String(languageCommandInterface.get_language_code()), nullptr);
+		languageCommandSettings.setProperty("CountryCode", String(languageCommandInterface.get_country_code()), nullptr);
+
 		languageCommandSettings.setProperty("AreaUnits", static_cast<int>(languageCommandInterface.get_commanded_area_units()), nullptr);
 		languageCommandSettings.setProperty("DateFormat", static_cast<int>(languageCommandInterface.get_commanded_date_format()), nullptr);
 		languageCommandSettings.setProperty("DecimalSymbol", static_cast<int>(languageCommandInterface.get_commanded_decimal_symbol()), nullptr);
@@ -1825,15 +1873,15 @@ void ServerMainComponent::save_settings()
 		languageCommandSettings.setProperty("TemperatureUnits", static_cast<int>(languageCommandInterface.get_commanded_temperature_units()), nullptr);
 		languageCommandSettings.setProperty("TimeFormat", static_cast<int>(languageCommandInterface.get_commanded_time_format()), nullptr);
 		languageCommandSettings.setProperty("VolumeUnits", static_cast<int>(languageCommandInterface.get_commanded_volume_units()), nullptr);
-		languageCommandSettings.setProperty("CountryCode", String(languageCommandInterface.get_country_code()), nullptr);
-		languageCommandSettings.setProperty("LanguageCode", String(languageCommandInterface.get_language_code()), nullptr);
-		compatibilitySettings.setProperty("Version", get_vt_version_byte(versionToReport), nullptr);
+
+		compatibilitySettings.setProperty("VTVersion", isobus::VirtualTerminalServer::get_vt_version_byte(versionToReport), nullptr);
+
 		hardwareSettings.setProperty("DataMaskRenderAreaSize", dataMaskRenderer.getWidth(), nullptr);
-		hardwareSettings.setProperty("VT_Number", vtNumber, nullptr);
+		hardwareSettings.setProperty("VTNumber", vtNumber, nullptr);
 		hardwareSettings.setProperty("SoftKeyDesignatorWidth", softKeyMaskDimensions.keyWidth, nullptr);
 		hardwareSettings.setProperty("SoftKeyDesignatorHeight", softKeyMaskDimensions.keyHeight, nullptr);
-		hardwareSettings.setProperty("SoftkeyColumnCount", softKeyMaskDimensions.columnCount, nullptr);
-		hardwareSettings.setProperty("SoftkeyRowCount", softKeyMaskDimensions.rowCount, nullptr);
+		hardwareSettings.setProperty("SoftkeyColumnCount", softKeyMaskDimensions.keyColumnCount, nullptr);
+		hardwareSettings.setProperty("SoftkeyRowCount", softKeyMaskDimensions.keyRowCount, nullptr);
 
 #ifdef JUCE_WINDOWS
 		hardwareSettings.setProperty("TouCANSerial", static_cast<int>(std::static_pointer_cast<isobus::TouCANPlugin>(parentCANDrivers.at(2))->get_serial_number()), nullptr);
@@ -1845,18 +1893,21 @@ void ServerMainComponent::save_settings()
 		{
 			hardwareSettings.setProperty("CANDriver", static_cast<int>(hardwareDriverIndex), nullptr);
 		}
-		loggingSettings.setProperty("Level", static_cast<int>(isobus::CANStackLogger::get_log_level()), nullptr);
-		loggingSettings.setProperty("Shown", static_cast<int>(logger.isVisible()), nullptr);
+
+		loggingSettings.setProperty("LoggingLevel", static_cast<int>(isobus::CANStackLogger::get_log_level()), nullptr);
+		loggingSettings.setProperty("LoggingWindow", static_cast<int>(logger.isVisible()), nullptr);
 		loggingSettings.setProperty("SaveIopBeforeParse", static_cast<int>(saveIopBeforeParse), nullptr);
+
 		controlSettings.setProperty("AutoStart", autostart, nullptr);
 		controlSettings.setProperty("AlarmAckKey", alarmAckKeyCode, nullptr);
+
 		settings.appendChild(languageCommandSettings, nullptr);
 		settings.appendChild(compatibilitySettings, nullptr);
 		settings.appendChild(hardwareSettings, nullptr);
 		settings.appendChild(loggingSettings, nullptr);
 		settings.appendChild(controlSettings, nullptr);
-		std::unique_ptr<XmlElement> xml(settings.createXml());
 
+		std::unique_ptr<XmlElement> xml(settings.createXml());
 		if (nullptr != xml)
 		{
 			xml->writeTo(settingsFile);
@@ -1987,7 +2038,10 @@ void ServerMainComponent::screen_capture(std::uint8_t item, std::uint8_t path, s
 int ServerMainComponent::minimum_height() const
 {
 	if (dataMaskRenderer.getHeight() > softKeyMaskDimensions.total_height())
+	{
 		return dataMaskRenderer.getHeight();
+	}
+
 	return softKeyMaskDimensions.total_height();
 }
 
@@ -2006,10 +2060,7 @@ void ServerMainComponent::remove_working_set(std::shared_ptr<isobus::VirtualTerm
 
 void ServerMainComponent::clear_iso_data()
 {
-	File isoDirectory(getAppDataDir() +
-	                  File::getSeparatorString() +
-	                  ISO_DATA_PATH +
-	                  File::getSeparatorString());
+	File isoDirectory(getAppDataDir() + File::getSeparatorString() + ISO_DATA_PATH + File::getSeparatorString());
 
 	if (isoDirectory.exists() && isoDirectory.isDirectory())
 	{
