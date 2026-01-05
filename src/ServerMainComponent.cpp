@@ -99,6 +99,7 @@ ServerMainComponent::ServerMainComponent(std::shared_ptr<isobus::InternalControl
 
 ServerMainComponent::~ServerMainComponent()
 {
+	setApplicationCommandManagerToWatch(nullptr);
 }
 
 bool ServerMainComponent::get_is_enough_memory(std::uint32_t) const
