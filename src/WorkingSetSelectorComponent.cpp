@@ -9,6 +9,31 @@
 #include "WorkingSetLoadingIndicatorComponent.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+// Designators are authored against the size the VT advertises, not the button size, so the scaled area grows
+// to what one actually draws, bounded by the button or the advertised size. Pools authored for a bigger
+// terminal are then not clipped before scaling, and pools that park objects even further out still are.
+static void fit_designator_to_button(juce::Component &designator, int buttonX, int buttonY)
+{
+	const auto designatorArea = designator.getLocalBounds();
+	auto drawnArea = designatorArea;
+
+	for (auto *child : designator.getChildren())
+	{
+		drawnArea = drawnArea.getUnion(child->getBounds());
+	}
+
+	designator.setSize(juce::jmin(drawnArea.getRight(), juce::jmax(designatorArea.getWidth(), WorkingSetSelectorComponent::BUTTON_WIDTH)),
+	                   juce::jmin(drawnArea.getBottom(), juce::jmax(designatorArea.getHeight(), WorkingSetSelectorComponent::BUTTON_HEIGHT)));
+
+	if ((0 != designator.getWidth()) && (0 != designator.getHeight()))
+	{
+		designator.setTransform(juce::AffineTransform::scale(static_cast<float>(WorkingSetSelectorComponent::BUTTON_WIDTH) / static_cast<float>(designator.getWidth()),
+		                                                     static_cast<float>(WorkingSetSelectorComponent::BUTTON_HEIGHT) / static_cast<float>(designator.getHeight()),
+		                                                     static_cast<float>(buttonX),
+		                                                     static_cast<float>(buttonY)));
+	}
+}
+
 WorkingSetSelectorComponent::AckButton::AckButton() :
   juce::TextButton("ACK")
 {
@@ -161,7 +186,11 @@ std::shared_ptr<Component> WorkingSetSelectorComponent::getWorkingSetChildCompon
 	{
 		workingSetComponent = std::make_shared<WorkingSetLoadingIndicatorComponent>(workingSet, BUTTON_HEIGHT, BUTTON_WIDTH);
 	}
-	workingSetComponent->setTopLeftPosition(button_padding(), button_padding() + workingSetIndex * (BUTTON_HEIGHT + button_padding()));
+	const auto buttonX = button_padding();
+	const auto buttonY = button_padding() + workingSetIndex * (BUTTON_HEIGHT + button_padding());
+
+	workingSetComponent->setTopLeftPosition(buttonX, buttonY);
+	fit_designator_to_button(*workingSetComponent, buttonX, buttonY);
 	addAndMakeVisible(*workingSetComponent);
 	return workingSetComponent;
 }
